@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-gateway-secrets"
+version = "0.1.0"
+description = "Reusable keychain-backed secrets manager for local Python projects."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "keyring>=25",
+]
+keywords = [
+    "secrets",
+    "keyring",
+    "keychain",
+    "python",
+    "llm",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+llm-gateway-secret = "save_secret:main"
+
+[tool.setuptools]
+py-modules = ["secrets_manager", "save_secret"]
