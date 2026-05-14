@@ -1,5 +1,185 @@
 # LLM Gateway Secrets Manager
 
+This README is written for **my** workflow: I use this repo as my personal secrets helper across machines and projects. The section below is the **first place to look** — simple copy-paste examples for every common case. Everything after that is the full reference.
+
+---
+
+## My scenarios (read this first)
+
+Use account name **`openai`** when you want the same secret as `SecretsManager.set_openai_key(...)` / `get_openai_key()`.  
+`python save_secret.py` and `llm-gateway-secret` **lowercase** whatever you type at the name prompt (`OpenAI` → `openai`).
+
+---
+
+### 1) Add OpenAI secret while I am **inside the llm_gateway repo** (its venv on)
+
+**Option A — no install, run the script from the repo**
+
+```bash
+cd /path/to/llm_gateway
+source .venv/bin/activate          # your venv name may differ
+python save_secret.py
+```
+
+At prompts: press Enter for default name **`openai`**, then paste the API key.
+
+**Option B — this venv has the package installed (`pip install -e .` once)**
+
+```bash
+cd /path/to/llm_gateway
+source .venv/bin/activate
+python -m pip install -e .
+llm-gateway-secret
+```
+
+Same prompts: use **`openai`** (or Enter for default).
+
+**Option C — one line in Python (key may appear in shell history — avoid if unsure)**
+
+```bash
+cd /path/to/llm_gateway
+source .venv/bin/activate
+python -c "from secrets_manager import SecretsManager; SecretsManager.set_openai_key('sk-...')"
+```
+
+---
+
+### 2) Get OpenAI secret while I am **inside llm_gateway’s venv**
+
+**CLI (masked — safe to glance at)**
+
+```bash
+cd /path/to/llm_gateway
+source .venv/bin/activate
+python get_secret.py openai
+```
+
+If the package is installed in this venv:
+
+```bash
+llm-gateway-get-secret openai
+```
+
+**CLI (full key — only when I need to copy it)**
+
+```bash
+python get_secret.py openai --full
+# or
+llm-gateway-get-secret openai --full
+```
+
+**Python (real key in code)**
+
+```bash
+python -c "from secrets_manager import SecretsManager; print(SecretsManager.get_openai_key())"
+```
+
+---
+
+### 3) Get the **same** OpenAI secret while I am **inside another project’s venv**
+
+The key lives in the **macOS keychain**, not in the project folder. I only need this library importable in **that** venv.
+
+**One-time (per other project)**
+
+```bash
+cd /path/to/my-other-app
+source .venv/bin/activate
+python -m pip install -e /path/to/llm_gateway
+```
+
+**Then get the key (same as above)**
+
+```bash
+llm-gateway-get-secret openai
+llm-gateway-get-secret openai --full
+```
+
+Or without install, if I point `PYTHONPATH` at the repo (quick hack):
+
+```bash
+cd /path/to/my-other-app
+source .venv/bin/activate
+PYTHONPATH=/path/to/llm_gateway python -c "from secrets_manager import SecretsManager; print(SecretsManager.get_openai_key())"
+```
+
+**In that app’s code**
+
+```python
+from secrets_manager import SecretsManager
+
+api_key = SecretsManager.get_openai_key()
+```
+
+---
+
+### 4) Add a secret **from the other project’s venv** (not only from llm_gateway)
+
+After `pip install -e /path/to/llm_gateway` in that venv:
+
+```bash
+cd /path/to/my-other-app
+source .venv/bin/activate
+llm-gateway-secret
+```
+
+Use name **`openai`** for OpenAI. It is stored globally under keychain service `llm_gateway`, so llm_gateway and all other installed projects see it.
+
+---
+
+### 5) Other names I use often (same pattern)
+
+| I want | Save (CLI prompt or Python) | Read (CLI) |
+| --- | --- | --- |
+| OpenAI | name `openai` or `set_openai_key(...)` | `llm-gateway-get-secret openai` |
+| DeepSeek | name `deepseek` or `set_deepseek_key(...)` | `llm-gateway-get-secret deepseek` |
+| Claude / Anthropic | `claude` or `anthropic` helpers | `llm-gateway-get-secret claude` |
+| Custom | any name, remember lowercasing from CLI | `llm-gateway-get-secret myname` |
+
+---
+
+### 6) Check audit **logs** (always under my home dir by default)
+
+Log file (active):
+
+```text
+~/.llm_gateway/logs/secrets_manager.log
+```
+
+**Watch new lines as I save/get secrets**
+
+```bash
+tail -f ~/.llm_gateway/logs/secrets_manager.log
+```
+
+**Last 20 lines**
+
+```bash
+tail -n 20 ~/.llm_gateway/logs/secrets_manager.log
+```
+
+**Search for one account (e.g. openai)**
+
+```bash
+grep '"secret_name": "openai"' ~/.llm_gateway/logs/secrets_manager.log | tail -n 5
+```
+
+Each line is **JSON**: action (`set` / `get` / `delete`), masked values, caller, optional `context`. No raw API keys are written.
+
+**Older days (rotation keeps ~15 days)**
+
+```bash
+ls ~/.llm_gateway/logs/
+# example rotated file:
+tail -n 20 ~/.llm_gateway/logs/secrets_manager.log.2026-05-12
+```
+
+Override paths only if I change env vars: `LLM_GATEWAY_LOG_DIR`, `LLM_GATEWAY_HOME`, `LLM_GATEWAY_SERVICE_NAME` (see full reference below).
+
+---
+
+## Full documentation (reference)
+
 This repository is now structured so you can keep it in Git as a shared Python library and use it from all of your local projects.
 
 The library stores secrets in the system keychain through `keyring`, uses one shared service name by default, and writes masked audit logs to a shared log directory in your home folder.
@@ -11,7 +191,7 @@ The library stores secrets in the system keychain through `keyring`, uses one sh
 - One shared keychain service by default: `llm_gateway`
 - One shared audit log location by default: `~/.llm_gateway/logs`
 - Daily log rotation with 15-day retention
-- A CLI command for manually saving secrets after install
+- CLI commands after install: `llm-gateway-secret` (save) and `llm-gateway-get-secret` (read)
 - A path to later publish the same code as a library
 
 ## Recommended Setup
@@ -57,7 +237,7 @@ So every local project or virtual environment that wants to use this library mus
 This repository now includes:
 
 - `secrets_manager.py`: the reusable library module
-- `save_secret.py`: CLI entry point for manually saving a secret
+- `save_secret.py` / `get_secret.py`: CLI entry points used by the installed console scripts
 - `pyproject.toml`: packaging metadata so the repo can be installed locally, from Git, or published later
 - `.gitignore`: excludes virtualenv, build output, and log files
 
@@ -136,64 +316,144 @@ Once published, installation becomes:
 python -m pip install llm-gateway-secrets
 ```
 
-## How To Make It Available To All Local Projects
+## Quick start: install in another project, then CLI and Python
 
-For every local Python project:
+Use this whenever you want **any other local project** to use the same keychain-backed secrets.
 
-1. Activate that project's virtual environment.
-2. Install this library with `pip install -e /path/to/llm_gateway` or from Git.
-3. Import it with `from secrets_manager import SecretsManager`.
+### 1. Go to the other project and activate its virtual environment
 
-That is the cleanest and safest setup. It avoids copying files between projects and keeps one shared implementation in Git.
-
-## Quick Start In Another Project
-
-After installing the library into a project, use:
-
-```python
-from secrets_manager import SecretsManager
+```bash
+cd /path/to/your-other-project
+source .venv/bin/activate
 ```
 
-Save a secret once:
+Use whatever venv or tool you already use (`conda`, `uv`, etc.). The important part is that `python` and `pip` refer to **that** project’s environment.
 
-```python
-from secrets_manager import SecretsManager
+### 2. Install this library into that environment
 
-SecretsManager.set_openai_key(
-    "sk-xxxx",
-    context={"app": "my-local-project", "env": "dev"},
-)
+From a local clone (typical while you develop this repo):
+
+```bash
+python -m pip install -e /absolute/path/to/llm_gateway
 ```
 
-Read it later from any other installed local project:
+Example:
 
-```python
-from secrets_manager import SecretsManager
-
-openai_key = SecretsManager.get_openai_key()
-
-if openai_key is None:
-    raise RuntimeError("OpenAI key is not available")
+```bash
+python -m pip install -e ~/projects/llm_gateway
 ```
 
-## Manual Secret Save From CLI
+Or install from Git / PyPI as in [Install it into another local project](#3-install-it-into-another-local-project) above.
 
-After the package is installed, you can use the console command:
+Installing registers two commands on `PATH` **for that environment only**: `llm-gateway-secret` and `llm-gateway-get-secret`. If a command is not found, confirm the venv is activated and reinstall.
+
+### 3. Set a secret from the command line (interactive)
 
 ```bash
 llm-gateway-secret
 ```
 
-It prompts for:
+- At the secret name prompt, press Enter for the default **`openai`**, or type another account name (`deepseek`, `github`, and so on).
+- At the secret prompt, paste the API key or token (input is hidden).
 
-- the secret name, such as `openai`, `deepseek`, `claude`, or any custom name
-- the secret value
+This calls the same code as `SecretsManager.set_secret(...)`. Names you type here are stored in **lowercase** (for example `OpenAI` becomes `openai`).
 
-If you are running directly from this repository without installing it yet, you can also use:
+### 4. Read a secret from the command line
+
+Check that something is stored (masked, safe for shared terminals):
+
+```bash
+llm-gateway-get-secret openai
+```
+
+Print the full value only when you need to copy it (risk: shell history; avoid on shared machines):
+
+```bash
+llm-gateway-get-secret openai --full
+```
+
+Use the **same account name** you saved under (remember lowercasing from step 3). For keys saved with `SecretsManager.set_openai_key(...)`, the account name is `openai`.
+
+### 5. Use the same secret from Python in that project
+
+```python
+from secrets_manager import SecretsManager
+
+api_key = SecretsManager.get_openai_key()
+if api_key is None:
+    raise RuntimeError("OpenAI key is not set")
+
+# Optional: masked string for logs or UI
+print(SecretsManager.get_openai_key(masked=True))
+```
+
+Secrets are stored in the system keychain under the shared service `llm_gateway`. Any **other** project on this machine that installs the library can read the same account names after you save once.
+
+## How To Make It Available To All Local Projects
+
+For every local Python project:
+
+1. Activate that project's virtual environment.
+2. Install this library with `pip install -e /path/to/llm_gateway` or from Git (or PyPI when published).
+3. Use the CLI (`llm-gateway-secret`, `llm-gateway-get-secret`) or import `from secrets_manager import SecretsManager` in code.
+
+That is the cleanest setup: one Git source, many venvs, one shared keychain namespace.
+
+## Command-line tools (reference)
+
+Details for the same commands summarized in [Quick start](#quick-start-install-in-another-project-then-cli-and-python).
+
+### Save: `llm-gateway-secret`
+
+After `pip install`, run:
+
+```bash
+llm-gateway-secret
+```
+
+It prompts for the account name and the secret value.
+
+If you are working **inside this repository** and have not installed the package yet:
 
 ```bash
 python save_secret.py
 ```
+
+`save_secret.py` lowercases the account name before storing, so `OpenAI` and `openaiApI` both become `openaiapi`.
+
+### Read: `llm-gateway-get-secret`
+
+After `pip install`:
+
+```bash
+llm-gateway-get-secret openai
+llm-gateway-get-secret openai --full
+```
+
+From this repo without installing:
+
+```bash
+python get_secret.py openai
+python get_secret.py openai --full
+```
+
+### Terminal: correct one-liners (Python `-c`)
+
+Shells do **not** run Python expressions after `python` unless you use `-c`. Wrong:
+
+```bash
+python SecretsManager.get_secret("openai")
+```
+
+That makes `python` look for a **file** named `SecretsManager.get_secret("openai")`, and zsh may show errors like `unknown sort specifier` while parsing.
+
+Right:
+
+```bash
+python -c "from secrets_manager import SecretsManager; print(SecretsManager.get_secret('openai'))"
+```
+
+Use the same account name you stored (for `set_openai_key`, that is `openai`).
 
 ## Save Secrets
 
@@ -420,6 +680,21 @@ SecretsManager.delete_provider_key(provider_name, context=None)
 
 ## Quick reference
 
+### After `pip install` in another project’s venv
+
+| Step | What to run |
+| --- | --- |
+| Activate that project’s venv | `source .venv/bin/activate` (or your usual path) |
+| Install this library | `python -m pip install -e /path/to/llm_gateway` |
+| Set a secret (interactive) | `llm-gateway-secret` |
+| Read masked | `llm-gateway-get-secret <account>` |
+| Read full value | `llm-gateway-get-secret <account> --full` |
+| Use in code | `from secrets_manager import SecretsManager` then `get_*` / `get_secret(...)` |
+
+Account names from `llm-gateway-secret` are stored **lowercase**. `set_openai_key` uses account `openai`.
+
+### API and paths
+
 | Topic | Command or snippet |
 | --- | --- |
 | Install (dev, from repo) | `python -m pip install -e /path/to/llm_gateway` |
@@ -441,8 +716,14 @@ Provider helpers follow the same pattern: `set_<provider>_key`, `get_<provider>_
 | Default keychain service | `llm_gateway` (`SecretsManager.SERVICE_NAME`) |
 | Default log file | `~/.llm_gateway/logs/secrets_manager.log` |
 | Log rotation | Daily at midnight, keep 15 days |
-| CLI (after install) | `llm-gateway-secret` |
-| CLI (from repo) | `python save_secret.py` |
+| CLI save (after install) | `llm-gateway-secret` |
+| CLI save (from repo) | `python save_secret.py` |
+| CLI read masked (after install) | `llm-gateway-get-secret openai` |
+| CLI read full (after install) | `llm-gateway-get-secret openai --full` |
+| CLI read (from repo) | `python get_secret.py openai` |
+| One-liner read in shell | `python -c "from secrets_manager import SecretsManager; print(SecretsManager.get_secret('openai'))"` |
+
+Do not run `python SecretsManager.get_secret(...)` — that is not valid Python invocation; use `-c` or the `get_secret` CLI above.
 
 Environment overrides: `LLM_GATEWAY_SERVICE_NAME`, `LLM_GATEWAY_HOME`, `LLM_GATEWAY_LOG_DIR`.
 

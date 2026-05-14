@@ -26,6 +26,7 @@ classifiers = [
 
 [project.scripts]
 llm-gateway-secret = "save_secret:main"
+llm-gateway-get-secret = "get_secret:main"
 
 [tool.setuptools]
-py-modules = ["secrets_manager", "save_secret"]
+py-modules = ["secrets_manager", "save_secret", "get_secret"]
